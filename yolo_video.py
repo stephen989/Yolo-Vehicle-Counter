@@ -16,6 +16,10 @@ inputWidth, inputHeight = 416, 416
 LABELS, weightsPath, configPath, inputVideoPath, outputVideoPath,\
 	preDefinedConfidence, preDefinedThreshold, USE_GPU= parseCommandLineArguments()
 
+for val in [LABELS, weightsPath, configPath, inputVideoPath, outputVideoPath,\
+	preDefinedConfidence, preDefinedThreshold, USE_GPU]:
+	print(val)
+
 # Initialize a list of colors to represent each possible class label
 np.random.seed(42)
 COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),
