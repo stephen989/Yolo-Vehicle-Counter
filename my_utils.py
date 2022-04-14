@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 from config import *
 import matplotlib.path as mpltPath
+import pickle
+from numpy.lib.stride_tricks import sliding_window_view
+
 
 
 
@@ -40,25 +43,33 @@ class Lane:
         self.name = name
         self.path = mpltPath.Path(self.points)
         self.count = 0
+        self.history = dict()
+        self.counts = list()
 
     def draw(self, frame, color=(0, 0, 0)):
         color = np.random.randint(0, 255, 3)
         frame = cv2.polylines(frame,
                               [self.points.astype(np.int32)],
                               isClosed=True,
-                              color=(0, 0, 255),
-                              thickness=3)
+                              color=(0, 170, 255),
+                              thickness=2)
         return frame
 
     def count_vehicles(self, current_positions):
-        self.count = sum(self.path.contains_points(list(current_positions.values())))
+        coords = list(current_positions.values())
+        ids = np.array(list(current_positions.keys()))
+        is_in = self.path.contains_points(coords)
+        vehicle_ids = ids[is_in]
+        self.history[len(self.history.keys())] = vehicle_ids
+        self.count = sum(is_in)
+        self.counts.append(self.count)
         return self.count
 
 
 
     def label(self, frame):
-        y = 0.5 * (self.points.max(0)[0][1] + self.points.min(0)[0][1])
-        x = 0.5 * (self.points.min(0)[0][0] + self.points.max(0)[0][0])
+        y = 0.5 * (self.points.max(0)[1] + self.points.min(0)[1])
+        x = 0.5 * (self.points.min(0)[0] + self.points.max(0)[0])
         write_text(frame, self.name, (x, y), anchor="center")
 
 
@@ -79,7 +90,11 @@ class Line:
         self.name = name
 
     def draw(self, image, color = (0,0,0)):
-        cv2.line(image, tuple(self.point1.astype(np.int32)), tuple(self.point2.astype(np.int32)), color, 2)
+        cv2.line(image,
+                 tuple(self.point1.astype(np.int32)),
+                 tuple(self.point2.astype(np.int32)),
+                 color,
+                 2)
 
     def detect_crossings(self, current_positions):
         new_crossings = []
@@ -100,20 +115,7 @@ class Line:
         write_text(frame, self.name, (x, y))
 
 
-# PURPOSE: Displays the vehicle count on the top-left corner of the frame
-# PARAMETERS: Frame on which the count is displayed, the count number of vehicles
-# RETURN: N/A
-def displayVehicleCount(frame, vehicle_count):
-    cv2.putText(
-        frame,  # Image
-        'Detected Vehicles: ' + str(vehicle_count),  # Label
-        (20, 20),  # Position
-        cv2.FONT_HERSHEY_SIMPLEX,  # Font
-        0.8,  # Size
-        (0, 0xFF, 0),  # Color
-        2,  # Thickness
-        cv2.FONT_HERSHEY_COMPLEX_SMALL,
-    )
+
 
 # PURPOSE: Displaying the FPS of the detected video
 # PARAMETERS: Start time of the frame, number of frames within the same second
@@ -126,6 +128,7 @@ def displayFPS(start_time, num_frames):
         num_frames = 0
         start_time = current_time
     return start_time, num_frame
+
 
 # PURPOSE: Draw all the detection boxes with a green dot at the center
 # RETURN: N/A
@@ -140,11 +143,11 @@ def drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame):
 
             # draw a bounding box rectangle and label on the frame
             color = [int(c) for c in COLORS[classIDs[i]]]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-            text = "{}: {:.4f}".format(LABELS[classIDs[i]],
+            cv2.rectangle(frame, (x, y), (x + w, y + h),  (205, 222, 239), 1)
+            text = "{}: {:.2f}".format(LABELS[classIDs[i]],
                                        confidences[i])
             cv2.putText(frame, text, (x, y - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (205, 222, 239), 2)
             # Draw a green dot in the middle of the box
             cv2.circle(frame, (x + (w // 2), y + (h // 2)), 2, (0, 0xFF, 0), thickness=2)
 
@@ -156,6 +159,7 @@ def write_text(frame,
                padding = 5,
                bg=(255,255,255)):
     lines = lines.split("\n")
+
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.75
     font_color = (0, 0, 0)
@@ -171,19 +175,24 @@ def write_text(frame,
         x -= 0.75*total_width
     x, y = int(x), int(y)
     cv2.rectangle(frame, (x, y + total_height), (x + total_width, y-padding), bg, -1)
-
-
+    padding = 10
+    lines.remove("")
     for text in lines:
-        text_size, _ = cv2.getTextSize(text, font, font_scale, font_thickness)
+        left, right = text.split(":")
+        # new_text = f"{left[:9]+':': <10}{right: >4}"
+        new_text = f"{left}: {right}"
+        print(new_text)
+        text_size, _ = cv2.getTextSize(new_text, font, font_scale, font_thickness)
         text_w, text_h = text_size
-        # cv2.rectangle(frame, (x, y-text_h), (x + text_w, y - text_h), bg, -1)
+#         cv2.rectangle(frame, (x, y-text_h), (x + text_w, y - text_h), bg, -1)
         cv2.putText(frame,
-                    text.upper(),
+                    new_text.upper(),
                     (x, y+text_h),
                     font,
                     font_scale,
                     font_color)
         y += text_h + padding
+
 
 # PURPOSE: Initializing the video writer with the output video path and the same number
 # of fps, width and height as the source video
@@ -200,12 +209,51 @@ def initializeVideoWriter(video_width, video_height, videoStream, outputVideoPat
 
 def get_frame_text(lanes, lines, fps):
     frame_text = ""
-    for i, line in enumerate(lines):
-      frame_text += f"\n{line.name} {str(i)}: {len(line.crossings)}"
-    for i, lane in enumerate(lanes):
-      frame_text += f"\n{lane.name} {str(i)}: {lane.count}"
+    for line in lines:
+        frame_text += f"\n{line.name}: {len(line.crossings)}"
+    for lane in lanes:
+        frame_text += f"\n{lane.name}: {lane.count}"
     nlane_switches = sum([len(line.crossings) for line in lines if "Lane" in line.name])
-    frame_text += f"\nLane Switches: {nlane_switches}"
+    # frame_text += f"\nLane Switches: {nlane_switches}"
     frame_text += f"\nFPS: {fps:.2f}"
     return frame_text
-#
+
+
+def pickle_dump(obj, file):
+    with open(file, "wb") as f:
+        pickle.dump(obj, f)
+
+
+def create_lane_log(lanes):
+    log = np.zeros((len(lanes), 115, 77)).astype("int")
+    for j, lane in enumerate(lanes):
+        for i in range(115):
+            cars = lane.history[i]
+            for car in cars:
+                log[j, i, car] = 1
+    return log
+
+
+def get_switches(log):
+    switches = []
+    for car in range(log.shape[2]):
+        lanes_visited = np.where(log.sum(1)[:,car]>3)[0]
+        nlane = len(lanes_visited)
+        if nlane > 1:
+            times = np.zeros((3, 2), np.int32)
+            for lane in lanes_visited:
+                arr = sliding_window_view(log[lane,:,car], window_shape=5).max(1)
+                in_lane = np.where(arr==1)[0]
+                joined_lane = in_lane[0]
+                left_lane = in_lane[-1]
+                times[lane] = [joined_lane, left_lane]
+            times[np.where(times==0)[0]] = 1e6
+            current_lane = np.argmin(times[:,0])
+            times[current_lane,0] = 1e6
+            while np.min(times[:,0]) < 1e6:
+                next_lane = np.argmin(times[:,0])
+                switches.append((car, current_lane, next_lane, times[current_lane, 1]))
+
+                current_lane = next_lane
+                times[current_lane,0] = 1e6
+    return switches

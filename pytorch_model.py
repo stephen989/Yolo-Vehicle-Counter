@@ -9,15 +9,17 @@ import pickle
 import torch
 
 config_name = f"video_configs/{inputVideoPath.split('/')[-1]}_config"
-# if not os.path.exists(config_name):
-#     lanes, lines = setup_video(inputVideoPath, config_name)
-# else:
-#     lanes, lines = pickle.load(open(config_name, "rb"))
-lanes, lines = [], []
+if not os.path.exists(config_name):
+    lanes, lines = setup_video(inputVideoPath, config_name)
+else:
+    lanes, lines = pickle.load(open(config_name, "rb"))
+
+lines = [Line(line.points, line.name) for line in lines]
+lanes = [Lane(lane.points, lane.name) for lane in lanes]
 np.random.seed(42)
 
 all_detections = []
-outputVideoPath = "batches_" + outputVideoPath
+outputVideoPath = "pytorch_" + outputVideoPath
 if os.path.exists(outputVideoPath):
     original_output_path = outputVideoPath.split('.')
     version = 1
