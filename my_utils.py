@@ -4,6 +4,7 @@ from config import *
 import matplotlib.path as mpltPath
 import pickle
 from numpy.lib.stride_tricks import sliding_window_view
+import matplotlib.pyplot as plt
 
 
 
@@ -18,7 +19,7 @@ LABELS = ['person', 'bicycle', 'car', 'motorbike', 'aeroplane', 'bus', 'train', 
           'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
           'teddy bear', 'hair drier', 'toothbrush']
 np.random.seed(1)
-list_of_vehicles = ["bicycle", "car", "motorbike", "bus", "truck", "train"]
+list_of_vehicles = ["bicycle", "car", "motorbike", "bus", "truck", "train", "person"]
 COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),
                            dtype="uint8")
 
@@ -48,10 +49,12 @@ class Lane:
 
     def draw(self, frame, color=(0, 0, 0)):
         color = np.random.randint(0, 255, 3)
+        color = (0,170,255)
+        color = (200,200,200)
         frame = cv2.polylines(frame,
                               [self.points.astype(np.int32)],
                               isClosed=True,
-                              color=(0, 170, 255),
+                              color=color,
                               thickness=2)
         return frame
 
@@ -90,6 +93,7 @@ class Line:
         self.name = name
 
     def draw(self, image, color = (0,0,0)):
+        color = (51,85,255)
         cv2.line(image,
                  tuple(self.point1.astype(np.int32)),
                  tuple(self.point2.astype(np.int32)),
@@ -105,8 +109,8 @@ class Line:
                     if distance_to_line(self.A, self.B, self.c, position[0], position[1]) < distance_margin:
                         new_crossings.append(vehicle)
         new_crossings = [crossing for crossing in new_crossings if crossing not in self.crossings]
-        if new_crossings:
-            print(f"{self.name} crossings: ", " ".join([str(vehicle) for vehicle in new_crossings]))
+        # if new_crossings:
+        #     print(f"{self.name} crossings: ", " ".join([str(vehicle) for vehicle in new_crossings]))
         self.crossings += new_crossings
 
     def label(self, frame):
@@ -133,6 +137,8 @@ def displayFPS(start_time, num_frames):
 # PURPOSE: Draw all the detection boxes with a green dot at the center
 # RETURN: N/A
 def drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame):
+    color = (205,222,239)
+    color = (75,10,10)
     # ensure at least one detection exists
     if len(idxs) > 0:
         # loop over the indices we are keeping
@@ -142,12 +148,12 @@ def drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame):
             (w, h) = (boxes[i][2], boxes[i][3])
 
             # draw a bounding box rectangle and label on the frame
-            color = [int(c) for c in COLORS[classIDs[i]]]
-            cv2.rectangle(frame, (x, y), (x + w, y + h),  (205, 222, 239), 1)
+            # color = [int(c) for c in COLORS[classIDs[i]]]
+            cv2.rectangle(frame, (x, y), (x + w, y + h),  color, 1)
             text = "{}: {:.2f}".format(LABELS[classIDs[i]],
                                        confidences[i])
-            cv2.putText(frame, text, (x, y - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (205, 222, 239), 2)
+            cv2.putText(frame, text.upper(), (x, y - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             # Draw a green dot in the middle of the box
             cv2.circle(frame, (x + (w // 2), y + (h // 2)), 2, (0, 0xFF, 0), thickness=2)
 
@@ -167,7 +173,7 @@ def write_text(frame,
 
     text_sizes = [cv2.getTextSize(text, font, font_scale, font_thickness)[0] for text in lines]
     total_height = sum([height for (width, height) in text_sizes]) + padding * (len(lines) + 1)
-    total_width = max([width for (width, height) in text_sizes]) + padding + 20
+    total_width = max([width for (width, height) in text_sizes]) + padding + 50
     if anchor == "left":
         x, y = position
     else:
@@ -181,7 +187,6 @@ def write_text(frame,
         left, right = text.split(":")
         # new_text = f"{left[:9]+':': <10}{right: >4}"
         new_text = f"{left}: {right}"
-        print(new_text)
         text_size, _ = cv2.getTextSize(new_text, font, font_scale, font_thickness)
         text_w, text_h = text_size
 #         cv2.rectangle(frame, (x, y-text_h), (x + text_w, y - text_h), bg, -1)
@@ -224,10 +229,10 @@ def pickle_dump(obj, file):
         pickle.dump(obj, f)
 
 
-def create_lane_log(lanes):
-    log = np.zeros((len(lanes), 115, 77)).astype("int")
+def create_lane_log(lanes, max_id):
+    log = np.zeros((len(lanes), len(lanes[0].history), max_id)).astype("int")
     for j, lane in enumerate(lanes):
-        for i in range(115):
+        for i in range(len(lanes[0].history)):
             cars = lane.history[i]
             for car in cars:
                 log[j, i, car] = 1
@@ -257,3 +262,24 @@ def get_switches(log):
                 current_lane = next_lane
                 times[current_lane,0] = 1e6
     return switches
+
+def get_counts(lanes, df):
+    counts = np.zeros((len(df), len(lanes)))
+    for i in range(len(df)):
+        counts[i] = [count(lane, df.iloc[i].dropna().values.tolist()) for lane in lanes]
+    return counts
+
+
+def count(lane, vals_list):
+    return lane.path.contains_points(vals_list).sum()
+
+def create_plot_img(fig, counts):
+    plt.xlim((0, len(counts)))
+    plt.ylim((0, 1.25 * np.max(counts)))
+    plt.plot(counts)
+    fig.canvas.draw()
+    img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8,
+                        sep='')
+    img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    fig.axes[0].set_prop_cycle(color=['red', 'green', 'blue'])
+    return fig, img
