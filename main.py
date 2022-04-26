@@ -51,7 +51,7 @@ writer = initializeVideoWriter(video_width, video_height, videoStream, outputVid
 start_time = int(time.time())
 # loop over frames from the video file stream
 while True:
-    frame_start = time.time()
+    batch_start = time.time()
     frames = []
 
     for i in range(BATCH_SIZE):
@@ -90,7 +90,7 @@ while True:
         lane.count_vehicles(current_positions)
 
     #### FRAME TEXT ####
-    fps = 1 / (time.time() - frame_start)
+    fps = BATCH_SIZE / (time.time() - batch_start)
     frame_text = get_frame_text(lanes, lines, fps)
     write_text(frame, frame_text)
 

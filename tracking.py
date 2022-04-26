@@ -62,8 +62,8 @@ def count_vehicles(idxs, boxes, classIDs, vehicle_count, previous_frame_detectio
 
         for (x, y) in current_detections.keys():
             id = current_detections.get((x, y))
-            cv2.putText(frame, str(id), (x, y), \
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, [0, 0, 255], 2)
+            # cv2.putText(frame, str(id), (x, y), \
+            #                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, [0, 0, 255], 2)
 
     return vehicle_count, current_detections
 

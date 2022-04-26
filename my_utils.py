@@ -134,6 +134,36 @@ def displayFPS(start_time, num_frames):
     return start_time, num_frame
 
 
+def draw_dashcam_boxes(boxes, classIDs, confidences, frame):
+    color = (250,250,30)
+    idxs = cv2.dnn.NMSBoxes(boxes, confidences, preDefinedConfidence,
+                            preDefinedThreshold)
+    counts = {name: 0 for name in LABELS}
+    # ensure at least one detection exists
+    if len(idxs) > 0:
+        # loop over the indices we are keeping
+        for i in idxs.flatten():
+            # extract the bounding box coordinates
+            (x, y) = (boxes[i][0], boxes[i][1])
+            (w, h) = (boxes[i][2], boxes[i][3])
+
+            # draw a bounding box rectangle and label on the frame
+            # color = [int(c) for c in COLORS[classIDs[i]]]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            classname = LABELS[classIDs[i]]
+            if classname in list_of_vehicles:
+                counts[classname] += 1
+                text = "{}: {:.2f}".format(classname, confidences[i])
+                cv2.putText(frame, text.upper(), (x, y - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                # Draw a green dot in the middle of the box
+                cv2.circle(frame, (x + (w // 2), y + (h // 2)), 2, (0, 0xFF, 0), thickness=2)
+        text = "\n".join([f"{vehicle}: {str(counts[vehicle])}" for vehicle in list_of_vehicles])
+        write_text(frame, text)
+
+
+
+
 # PURPOSE: Draw all the detection boxes with a green dot at the center
 # RETURN: N/A
 def drawDetectionBoxes(idxs, boxes, classIDs, confidences, frame):
@@ -173,6 +203,7 @@ def write_text(frame,
 
     text_sizes = [cv2.getTextSize(text, font, font_scale, font_thickness)[0] for text in lines]
     total_height = sum([height for (width, height) in text_sizes]) + padding * (len(lines) + 1)
+    total_height += int(total_height/len(lines))
     total_width = max([width for (width, height) in text_sizes]) + padding + 50
     if anchor == "left":
         x, y = position
@@ -182,7 +213,8 @@ def write_text(frame,
     x, y = int(x), int(y)
     cv2.rectangle(frame, (x, y + total_height), (x + total_width, y-padding), bg, -1)
     padding = 10
-    lines.remove("")
+    if "" in lines:
+        lines.remove("")
     for text in lines:
         left, right = text.split(":")
         # new_text = f"{left[:9]+':': <10}{right: >4}"
@@ -207,7 +239,7 @@ def initializeVideoWriter(video_width, video_height, videoStream, outputVideoPat
     # Getting the fps of the source video
     sourceVideofps = videoStream.get(cv2.CAP_PROP_FPS)
     # initialize our video writer
-    fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+    fourcc = cv2.VideoWriter_fourcc(*"MPEG")
     return cv2.VideoWriter(outputVideoPath, fourcc, sourceVideofps,
                            (video_width, video_height), True)
 

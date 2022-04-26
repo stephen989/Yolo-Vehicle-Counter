@@ -3,7 +3,8 @@ from tracking import *
 
 
 def get_pytorch_outputs(model, frames):
-    results = model(frames)
+    with torch.no_grad():
+        results = model(frames)
     results_dfs = results.pandas().xyxy
     # results_df = results.pandas().xyxy[0]
     boxes, confidences, classids = [], [], []
@@ -48,8 +49,8 @@ if MODEL_TYPE == "cv2":
     get_model_output = get_cv2_outputs
 elif MODEL_TYPE == "pytorch":
     import torch
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5m', pretrained=True)
-    model = model.cpu()
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5l', pretrained=True)
+    # model = model.cpu()
     get_model_output = get_pytorch_outputs
 else:
     raise ValueError("MODEL_TYPE must be cv2 or pytorch")
