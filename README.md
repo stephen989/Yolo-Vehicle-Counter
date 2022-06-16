@@ -1,5 +1,5 @@
 # Yolo Vehicle Counter
-
+Put this on your fucking dashboard.
 ## Overview
 You Only Look Once (YOLO) is a CNN architecture for performing real-time object detection. The algorithm applies a single neural network to the full image, and then divides the image into regions and predicts bounding boxes and probabilities for each region. For more detailed working of YOLO algorithm, please refer to the [YOLO paper](https://pjreddie.com/media/files/papers/YOLOv3.pdf). 
 
